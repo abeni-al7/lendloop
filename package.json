@@ -6,22 +6,38 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p convex",
+    "test": "vitest run",
+    "convex": "convex dev",
+    "seed": "convex run seed:run",
+    "demo-users": "node --env-file=.env.local scripts/create-demo-users.mjs"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.9.25",
+    "clsx": "^2.1.1",
+    "convex": "^1.49.0",
+    "lucide-react": "^1.70.0",
     "next": "16.4.5",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@clerk/backend": "3.27.0",
+    "@edge-runtime/vm": "^5.0.0",
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "convex-test": "^0.0.67",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "prettier": "^3.9.10",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.1.0"
   },
   "packageManager": "pnpm@11.20.0"
 }

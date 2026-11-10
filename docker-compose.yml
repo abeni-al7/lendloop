@@ -1,0 +1,43 @@
+# n8n for LendLoop. Start with: docker compose up -d
+# Secrets come from n8n/.env (copy n8n/.env.example). Never commit that file.
+x-n8n: &n8n
+  image: n8nio/n8n:2.47.3
+  # Host networking so n8n and the local Convex backend reach each other on localhost.
+  network_mode: host
+  env_file: n8n/.env
+  environment:
+    GENERIC_TIMEZONE: UTC
+    TZ: UTC
+    N8N_HOST: localhost
+    N8N_PORT: "5678"
+    N8N_DIAGNOSTICS_ENABLED: "false"
+    N8N_PERSONALIZATION_ENABLED: "false"
+    # Code nodes read the two signing secrets from env and use Node's crypto.
+    N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    NODE_FUNCTION_ALLOW_BUILTIN: crypto
+  volumes:
+    - n8n_data:/home/node/.n8n
+    - ./n8n/workflows:/workflows:ro
+
+services:
+  # One-shot: import the exported workflows and publish them.
+  n8n-import:
+    <<: *n8n
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - >
+        n8n import:workflow --separate --input=/workflows &&
+        n8n publish:workflow --id=LLerrorHandler01 &&
+        n8n publish:workflow --id=LLnotifications1 &&
+        n8n publish:workflow --id=LLoverdueRemind1
+
+  n8n:
+    <<: *n8n
+    restart: unless-stopped
+    depends_on:
+      n8n-import:
+        condition: service_completed_successfully
+
+volumes:
+  n8n_data:

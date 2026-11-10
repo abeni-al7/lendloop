@@ -1,0 +1,92 @@
+{
+  "id": "LLerrorHandler01",
+  "name": "LendLoop: error handler",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "e1",
+      "name": "When a LendLoop workflow fails",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "e2",
+      "name": "Sign failure report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Report a failed workflow run to LendLoop so admins see it. No loan data is sent.\nconst crypto = require('crypto');\nconst { execution, workflow } = $input.first().json;\nconst message = (execution?.error?.message || 'Unknown error').slice(0, 120);\nconst body = JSON.stringify({\n  idempotencyKey: `wf-error:${execution?.id ?? Date.now()}`,\n  kind: 'workflow_failed',\n  detail: `${workflow?.name ?? 'Workflow'}: ${message}`,\n});\nconst t = Math.floor(Date.now() / 1000);\nconst v1 = crypto.createHmac('sha256', $env.CONVEX_WEBHOOK_SECRET).update(`${t}.${body}`).digest('hex');\nreturn [{ json: { body, signature: `t=${t},v1=${v1}` } }];\n"
+      }
+    },
+    {
+      "id": "e3",
+      "name": "Report failure to LendLoop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL }}/n8n/events",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When a LendLoop workflow fails": {
+      "main": [
+        [
+          {
+            "node": "Sign failure report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign failure report": {
+      "main": [
+        [
+          {
+            "node": "Report failure to LendLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

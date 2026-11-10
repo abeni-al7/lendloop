@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+!n8n/.env.example
+
+# local tooling
+/.playwright-mcp/
+/.impeccable/review/
+/.impeccable/mocks/
+/demo/
+
+# assistant tooling
+/.claude/

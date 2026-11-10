@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "convex/_generated/**",
+    ".claude/**",
+    ".impeccable/**",
+    // n8n Code node bodies: they run inside n8n, not in this app.
+    "n8n/src/**",
   ]),
 ]);
 

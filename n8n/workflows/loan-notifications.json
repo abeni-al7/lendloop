@@ -1,0 +1,246 @@
+{
+  "id": "LLnotifications1",
+  "name": "LendLoop: loan notifications",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "LLerrorHandler01",
+    "saveDataErrorExecution": "all"
+  },
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "Loan event from LendLoop",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "0b7c3e52-4a8e-4d3e-9f39-1e2d7c1a5b11",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lendloop-loan-events",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      }
+    },
+    {
+      "id": "n2",
+      "name": "Verify signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Verify the HMAC signature from LendLoop (Convex) on the raw request body.\nconst crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst item = $input.first();\nconst header = item.json.headers['x-lendloop-signature'] || '';\nconst raw = (await this.helpers.getBinaryDataBuffer(0, 'data')).toString('utf8');\n\nconst parts = Object.fromEntries(header.split(',').map((p) => p.trim().split('=')));\nconst t = Number(parts.t);\nconst now = Math.floor(Date.now() / 1000);\nlet valid = Boolean(secret && secret.length >= 32 && Number.isInteger(t) && parts.v1 && Math.abs(now - t) <= 300);\nif (valid) {\n  const expected = crypto.createHmac('sha256', secret).update(`${t}.${raw}`).digest('hex');\n  valid = expected.length === parts.v1.length &&\n    crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.v1));\n}\n// Never pass the body on when the signature is bad.\nreturn [{ json: valid ? { valid: true, event: JSON.parse(raw) } : { valid: false } }];\n"
+      }
+    },
+    {
+      "id": "n3",
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n4",
+      "name": "Send notice (mock email)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// Mock email: build the notice and log it. Swap this node for a real email node in production.\nconst { event } = $input.first().json;\nconst { loan, recipient, otherParty } = event;\nconst days = `${loan.startDate} to ${loan.endDate}`;\nconst subjects = {\n  'loan.requested': `${otherParty.firstName} wants to borrow your ${loan.tool.name}`,\n  approved: `${otherParty.firstName} said yes: ${loan.tool.name}`,\n  declined: `${otherParty.firstName} can't lend the ${loan.tool.name} this time`,\n  returned: `Thanks for returning the ${loan.tool.name}`,\n};\nconst subject = event.event === 'loan.requested' ? subjects['loan.requested'] : subjects[loan.status] ?? `Update on ${loan.tool.name}`;\nconst text = `Hi ${recipient.firstName},\\n\\n${subject} (${loan.tool.ref}, ${days}).\\nOpen LendLoop to see the details.`;\nconsole.log(`[mock email] to=${recipient.email ?? 'no-email'} subject=\"${subject}\"`);\nreturn [{ json: { event, mail: { to: recipient.email, subject, text, sentAt: new Date().toISOString() } } }];\n"
+      }
+    },
+    {
+      "id": "n5",
+      "name": "Sign write-back",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// Sign the write-back to LendLoop. The idempotency key is the Convex event id,\n// so a retried webhook never records the same notice twice.\nconst crypto = require('crypto');\nconst { event, mail } = $input.first().json;\nconst payload = {\n  idempotencyKey: `notify:${event.eventId}`,\n  loanId: event.loan.id,\n  kind: event.recipient.role === 'owner' ? 'owner_notified' : 'borrower_notified',\n  detail: mail.subject,\n};\nconst body = JSON.stringify(payload);\nconst t = Math.floor(Date.now() / 1000);\nconst v1 = crypto.createHmac('sha256', $env.CONVEX_WEBHOOK_SECRET).update(`${t}.${body}`).digest('hex');\nreturn [{ json: { body, signature: `t=${t},v1=${v1}` } }];\n"
+      }
+    },
+    {
+      "id": "n6",
+      "name": "Record notice in LendLoop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -100
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL }}/n8n/events",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "n7",
+      "name": "Reply 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -100
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "n8",
+      "name": "Reply 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        120
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { error: 'Invalid signature' } }}",
+        "options": {
+          "responseCode": 401
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Loan event from LendLoop": {
+      "main": [
+        [
+          {
+            "node": "Verify signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify signature": {
+      "main": [
+        [
+          {
+            "node": "Signature valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature valid?": {
+      "main": [
+        [
+          {
+            "node": "Send notice (mock email)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send notice (mock email)": {
+      "main": [
+        [
+          {
+            "node": "Sign write-back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign write-back": {
+      "main": [
+        [
+          {
+            "node": "Record notice in LendLoop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record notice in LendLoop": {
+      "main": [
+        [
+          {
+            "node": "Reply 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

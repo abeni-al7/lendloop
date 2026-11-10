@@ -1,26 +1,107 @@
 @import "tailwindcss";
 
+/*
+ * LendLoop: a workshop shadow board.
+ * Painted board green is the ground, safety-yellow paint marks outlines and the one accent,
+ * enamel plates carry the tools. Rust only means late or declined.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --board: #1f3529;
+  --board-raised: #29432f;
+  --board-line: #3b5a45;
+  --peg: #172a20;
+  --paint: #f2c230;
+  --paint-ink: #1a2a20;
+  --enamel: #eceee7;
+  --enamel-2: #dfe3da;
+  --enamel-line: #c6ccc1;
+  --ink: #17221b;
+  --ink-soft: #4a5a4f;
+  --on-board: #eef1ea;
+  --on-board-soft: #a9bcaf;
+  --rust: #e2683f;
+  --rust-ink: #a8391a;
+  --leaf: #2f7d4a;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-board: var(--board);
+  --color-board-raised: var(--board-raised);
+  --color-board-line: var(--board-line);
+  --color-peg: var(--peg);
+  --color-paint: var(--paint);
+  --color-paint-ink: var(--paint-ink);
+  --color-enamel: var(--enamel);
+  --color-enamel-2: var(--enamel-2);
+  --color-enamel-line: var(--enamel-line);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-on-board: var(--on-board);
+  --color-on-board-soft: var(--on-board-soft);
+  --color-rust: var(--rust);
+  --color-rust-ink: var(--rust-ink);
+  --color-leaf: var(--leaf);
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
+  background: var(--board);
+  scrollbar-color: var(--board-line) var(--peg);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--board);
+  color: var(--on-board);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--paint);
+  color: var(--paint-ink);
+}
+
+:focus-visible {
+  outline: 3px solid var(--paint);
+  outline-offset: 2px;
+}
+
+a {
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+
+/* The peg grid behind the board. Holes are painted, not lit. */
+.pegboard {
+  background-image: radial-gradient(circle, var(--peg) 2.5px, transparent 3px);
+  background-size: 28px 28px;
+  background-position: 14px 14px;
+}
+
+.display {
+  font-variation-settings: "wdth" 118;
+  letter-spacing: -0.02em;
+}
+
+/* Enamel surfaces flip the page to light, so form controls and text follow. */
+.enamel {
+  color-scheme: light;
+  background: var(--enamel);
+  color: var(--ink);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
